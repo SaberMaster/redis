@@ -158,7 +158,7 @@ unsigned int dictGenCaseHashFunction(const unsigned char *buf, int len) {
  * NOTE: This function should only be called by ht_destroy(). */
 static void _dictReset(dictht *ht)
 {
-    ht->table = NULL;
+    ht->table = NULL; // 说明只有第一次插入数据才会分配空间
     ht->size = 0;
     ht->sizemask = 0;
     ht->used = 0;
@@ -242,20 +242,25 @@ int dictExpand(dict *d, unsigned long size)
  * guaranteed that this function will rehash even a single bucket, since it
  * will visit at max N*10 empty buckets in total, otherwise the amount of
  * work it does would be unbound and the function may block for a long time. */
+// n 代表每次推进的步数(将ht[0]的一个bucket 移动到ht[1])
 int dictRehash(dict *d, int n) {
+    // 如果bucket为空 继续向后检索的最大次数
     int empty_visits = n*10; /* Max number of empty buckets to visit. */
     if (!dictIsRehashing(d)) return 0;
 
+    // check exec step, and current ht is empty
     while(n-- && d->ht[0].used != 0) {
         dictEntry *de, *nextde;
 
         /* Note that rehashidx can't overflow as we are sure there are more
          * elements because ht[0].used != 0 */
         assert(d->ht[0].size > (unsigned long)d->rehashidx);
+        // if empty check forward
         while(d->ht[0].table[d->rehashidx] == NULL) {
             d->rehashidx++;
             if (--empty_visits == 0) return 1;
         }
+        // get dictEntry
         de = d->ht[0].table[d->rehashidx];
         /* Move all the keys in this bucket from the old to the new hash HT */
         while(de) {
@@ -264,6 +269,7 @@ int dictRehash(dict *d, int n) {
             nextde = de->next;
             /* Get the index in the new hash table */
             h = dictHashKey(d, de->key) & d->ht[1].sizemask;
+            // 将新移动过来的dictEntry 放到顶部
             de->next = d->ht[1].table[h];
             d->ht[1].table[h] = de;
             d->ht[0].used--;
@@ -348,11 +354,12 @@ dictEntry *dictAddRaw(dict *d, void *key)
     int index;
     dictEntry *entry;
     dictht *ht;
-
+    // 触发重hash
     if (dictIsRehashing(d)) _dictRehashStep(d);
 
     /* Get the index of the new element, or -1 if
      * the element already exists. */
+    // if exists return null
     if ((index = _dictKeyIndex(d, key)) == -1)
         return NULL;
 
@@ -360,8 +367,10 @@ dictEntry *dictAddRaw(dict *d, void *key)
      * Insert the element in top, with the assumption that in a database
      * system it is more likely that recently added entries are accessed
      * more frequently. */
+    // if rehashing handle the ht[1] else handle ht[0]
     ht = dictIsRehashing(d) ? &d->ht[1] : &d->ht[0];
     entry = zmalloc(sizeof(*entry));
+    // insert data to the head of the dictEntry, 新数据访问概率高
     entry->next = ht->table[index];
     ht->table[index] = entry;
     ht->used++;
@@ -381,9 +390,11 @@ int dictReplace(dict *d, void *key, void *val)
 
     /* Try to add the element. If the key
      * does not exists dictAdd will suceed. */
+    // call dictAdd, if not exists will ok
     if (dictAdd(d, key, val) == DICT_OK)
         return 1;
     /* It already exists, get the entry */
+    // if exists then find
     entry = dictFind(d, key);
     /* Set the new value and free the old one. Note that it is important
      * to do that in this order, as the value may just be exactly the same
@@ -402,7 +413,7 @@ int dictReplace(dict *d, void *key, void *val)
  * existing key is returned.)
  *
  * See dictAddRaw() for more information. */
-dictEntry *dictReplaceRaw(dict *d, void *key) {
+Dictentry *dictReplaceRaw(dict *d, void *key) {
     dictEntry *entry = dictFind(d,key);
 
     return entry ? entry : dictAddRaw(d,key);
@@ -415,7 +426,9 @@ static int dictGenericDelete(dict *d, const void *key, int nofree)
     dictEntry *he, *prevHe;
     int table;
 
+    // check is empty
     if (d->ht[0].size == 0) return DICT_ERR; /* d->ht[0].table is NULL */
+    // triger rehash
     if (dictIsRehashing(d)) _dictRehashStep(d);
     h = dictHashKey(d, key);
 
@@ -424,12 +437,16 @@ static int dictGenericDelete(dict *d, const void *key, int nofree)
         he = d->ht[table].table[idx];
         prevHe = NULL;
         while(he) {
+            // find the key
             if (key==he->key || dictCompareKeys(d, key, he->key)) {
                 /* Unlink the element from the list */
+                // if not the frist one
                 if (prevHe)
                     prevHe->next = he->next;
+                // if is the first one
                 else
                     d->ht[table].table[idx] = he->next;
+                // is free
                 if (!nofree) {
                     dictFreeKey(d, he);
                     dictFreeVal(d, he);
@@ -441,6 +458,7 @@ static int dictGenericDelete(dict *d, const void *key, int nofree)
             prevHe = he;
             he = he->next;
         }
+        // check is rehashing
         if (!dictIsRehashing(d)) break;
     }
     return DICT_ERR; /* not found */
@@ -494,17 +512,24 @@ dictEntry *dictFind(dict *d, const void *key)
     dictEntry *he;
     unsigned int h, idx, table;
 
+    // check is empty
     if (d->ht[0].used + d->ht[1].used == 0) return NULL; /* dict is empty */
+    // check is rehash, if rehashing exec step rehash(增量rehash)
     if (dictIsRehashing(d)) _dictRehashStep(d);
+    // get hash value
     h = dictHashKey(d, key);
     for (table = 0; table <= 1; table++) {
+        // get array index
         idx = h & d->ht[table].sizemask;
+        // get dictEntry
         he = d->ht[table].table[idx];
         while(he) {
+            // if same return
             if (key==he->key || dictCompareKeys(d, key, he->key))
                 return he;
             he = he->next;
         }
+        // if not rehashing return, else do same operations in ht[1]
         if (!dictIsRehashing(d)) return NULL;
     }
     return NULL;
@@ -969,6 +994,7 @@ static int _dictKeyIndex(dict *d, const void *key)
     dictEntry *he;
 
     /* Expand the hash table if needed */
+    // triger expand hash, 扩展长度为2倍
     if (_dictExpandIfNeeded(d) == DICT_ERR)
         return -1;
     /* Compute the key hash value */
@@ -982,6 +1008,7 @@ static int _dictKeyIndex(dict *d, const void *key)
                 return -1;
             he = he->next;
         }
+        // if rehashing search ht[1] also
         if (!dictIsRehashing(d)) break;
     }
     return idx;

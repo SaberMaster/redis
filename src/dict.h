@@ -44,6 +44,7 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+// dict的内部以单链表形式存储
 typedef struct dictEntry {
     void *key;
     union {
@@ -55,10 +56,11 @@ typedef struct dictEntry {
     struct dictEntry *next;
 } dictEntry;
 
+// 包含一系列函数函数指针
 typedef struct dictType {
     unsigned int (*hashFunction)(const void *key);
-    void *(*keyDup)(void *privdata, const void *key);
-    void *(*valDup)(void *privdata, const void *obj);
+    void *(*keyDup)(void *privdata, const void *key); // key 拷贝函数
+    void *(*valDup)(void *privdata, const void *obj); // val 拷贝函数
     int (*keyCompare)(void *privdata, const void *key1, const void *key2);
     void (*keyDestructor)(void *privdata, void *key);
     void (*valDestructor)(void *privdata, void *obj);
@@ -66,18 +68,20 @@ typedef struct dictType {
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
+// 哈希表结构,为了实现增量重hash 每个dict有两个
 typedef struct dictht {
-    dictEntry **table;
-    unsigned long size;
-    unsigned long sizemask;
-    unsigned long used;
+    dictEntry **table; // dictEntry 的指针数组
+    unsigned long size; // 数组长度
+    unsigned long sizemask; // size - 1 , hash & sizemask = hash % size
+    unsigned long used; // dict中的数据个数 其与size的比值就是load factor(装载因子), 大于阈值触发rehash
 } dictht;
 
+// dict 结构
 typedef struct dict {
-    dictType *type;
-    void *privdata;
-    dictht ht[2];
-    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
+    dictType *type; //指向类型的指针
+    void *privdata; // 私有数据指针 ? dictType的某些操作被调用时会传回给调用者
+    dictht ht[2]; // 两个hash表（类似于from to）
+    long rehashidx; /* rehashing not in progress if rehashidx == -1 */ // 重hash索引, 指明当前执行到重hash的位置
     int iterators; /* number of iterators currently running */
 } dict;
 
@@ -144,6 +148,7 @@ typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
 #define dictGetDoubleVal(he) ((he)->v.d)
 #define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
 #define dictSize(d) ((d)->ht[0].used+(d)->ht[1].used)
+// 定义宏 判断是否正在重hash
 #define dictIsRehashing(d) ((d)->rehashidx != -1)
 
 /* API */
