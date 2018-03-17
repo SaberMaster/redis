@@ -5175,6 +5175,7 @@ void clusterRedirectClient(client *c, clusterNode *n, int hashslot, int error_co
     } else if (error_code == CLUSTER_REDIR_MOVED ||
                error_code == CLUSTER_REDIR_ASK)
     {
+        // 向客户端发送重定向消息 并制定重定向节点的 ip port
         addReplySds(c,sdscatprintf(sdsempty(),
             "-%s %d %s:%d\r\n",
             (error_code == CLUSTER_REDIR_ASK) ? "ASK" : "MOVED",

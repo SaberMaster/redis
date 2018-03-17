@@ -2408,14 +2408,17 @@ int processCommand(client *c) {
     {
         int hashslot;
         int error_code;
+        // 获取命令对应的正确的Node
         clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
                                         &hashslot,&error_code);
+        // 如果Node不是当前节点
         if (n == NULL || n != server.cluster->myself) {
             if (c->cmd->proc == execCommand) {
                 discardTransaction(c);
             } else {
                 flagTransaction(c);
             }
+            // 想客户端发送重定向消息
             clusterRedirectClient(c,n,hashslot,error_code);
             return C_OK;
         }

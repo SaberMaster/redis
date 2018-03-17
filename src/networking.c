@@ -1296,6 +1296,7 @@ void processInputBuffer(client *c) {
             resetClient(c);
         } else {
             /* Only reset the client when the command was executed. */
+            // 执行命令的预处理(包含重定向)
             if (processCommand(c) == C_OK)
                 resetClient(c);
             /* freeMemoryIfNeeded may flush slave output buffers. This may result
