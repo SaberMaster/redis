@@ -155,11 +155,14 @@ robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply) {
  *
  * The program is aborted if the key already exists. */
 void dbAdd(redisDb *db, robj *key, robj *val) {
+    // assign key name (sds struct)
     sds copy = sdsdup(key->ptr);
+    // add key value in dict
     int retval = dictAdd(db->dict, copy, val);
-
+    // if key exist stop
     serverAssertWithInfo(NULL,key,retval == DICT_OK);
     if (val->type == OBJ_LIST) signalListAsReady(db, key);
+    // 如果集群模式 就讲键保存在solt里
     if (server.cluster_enabled) slotToKeyAdd(key);
  }
 
@@ -182,9 +185,12 @@ void dbOverwrite(redisDb *db, robj *key, robj *val) {
  * 2) clients WATCHing for the destination key notified.
  * 3) The expire time of the key is reset (the key is made persistent). */
 void setKey(redisDb *db, robj *key, robj *val) {
+    // check is exist same key
     if (lookupKeyWrite(db,key) == NULL) {
+        // not exist add
         dbAdd(db,key,val);
     } else {
+        // exist overwrite
         dbOverwrite(db,key,val);
     }
     incrRefCount(val);
@@ -1273,8 +1279,9 @@ int *georadiusGetKeys(struct redisCommand *cmd, robj **argv, int argc, int *numk
  * a fast way a key that belongs to a specified hash slot. This is useful
  * while rehashing the cluster. */
 void slotToKeyAdd(robj *key) {
+    // get key's slot
     unsigned int hashslot = keyHashSlot(key->ptr,sdslen(key->ptr));
-
+    // 将key 作为成员，slot作为分数 将其添加到 slots_to_keys 跳跃表中
     zslInsert(server.cluster->slots_to_keys,hashslot,key);
     incrRefCount(key);
 }
