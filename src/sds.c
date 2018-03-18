@@ -78,22 +78,29 @@ static inline char sdsReqType(size_t string_size) {
  * You can print the string with printf() as there is an implicit \0 at the
  * end of the string. However the string is binary safe and can contain
  * \0 characters in the middle, as the length is stored in the sds header. */
+// 创建一个新的sds
 sds sdsnewlen(const void *init, size_t initlen) {
     void *sh;
     sds s;
+    // 计算header类型
     char type = sdsReqType(initlen);
     /* Empty strings are usually created in order to append. Use type 8
      * since type 5 is not good at this. */
     if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
+    // 获得header长度
     int hdrlen = sdsHdrSize(type);
     unsigned char *fp; /* flags pointer. */
 
+    // 分配内存(header + s + 1)
     sh = s_malloc(hdrlen+initlen+1);
     if (!init)
         memset(sh, 0, hdrlen+initlen+1);
     if (sh == NULL) return NULL;
+    // 获取指向sds的指针
     s = (char*)sh+hdrlen;
+    // 获取header flag的指针
     fp = ((unsigned char*)s)-1;
+    // 根据类型初始化header头
     switch(type) {
         case SDS_TYPE_5: {
             *fp = type | (initlen << SDS_TYPE_BITS);
@@ -128,7 +135,9 @@ sds sdsnewlen(const void *init, size_t initlen) {
             break;
         }
     }
+    // 以 \0 结尾
     if (initlen && init)
+        // 拷贝数据
         memcpy(s, init, initlen);
     s[initlen] = '\0';
     return s;
@@ -152,8 +161,10 @@ sds sdsdup(const sds s) {
 }
 
 /* Free an sds string. No operation is performed if 's' is NULL. */
+// 释放
 void sdsfree(sds s) {
     if (s == NULL) return;
+    // 内存整体释放 连同header
     s_free((char*)s-sdsHdrSize(s[-1]));
 }
 
@@ -373,9 +384,11 @@ sds sdsgrowzero(sds s, size_t len) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+// 追加数据
 sds sdscatlen(sds s, const void *t, size_t len) {
     size_t curlen = sdslen(s);
 
+    // 检查当前大小是否能容纳扩展后的数据，如果不能容纳就迁移并更换header
     s = sdsMakeRoomFor(s,len);
     if (s == NULL) return NULL;
     memcpy(s+curlen, t, len);

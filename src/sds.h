@@ -39,6 +39,8 @@
 #include <stdarg.h>
 #include <stdint.h>
 
+//char* 指针
+// simple dynamic String
 typedef char *sds;
 
 /* Note: sdshdr5 is never used, we just access the flags byte directly.
@@ -47,10 +49,16 @@ struct __attribute__ ((__packed__)) sdshdr5 {
     unsigned char flags; /* 3 lsb of type, and 5 msb of string length */
     char buf[];
 };
+// ((__packed__)) 是为了让编译器以紧凑模式来分配内存
+// 可以使header与sds的数据部分紧密相连
 struct __attribute__ ((__packed__)) sdshdr8 {
+    // 长度
     uint8_t len; /* used */
+    // 最大容量
     uint8_t alloc; /* excluding the header and null terminator */
+    // 使用最低3位来表示header的类型
     unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    // 柔性数组
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr16 {
@@ -72,6 +80,7 @@ struct __attribute__ ((__packed__)) sdshdr64 {
     char buf[];
 };
 
+// SDS类型
 #define SDS_TYPE_5  0
 #define SDS_TYPE_8  1
 #define SDS_TYPE_16 2
@@ -80,10 +89,13 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_TYPE_MASK 7
 #define SDS_TYPE_BITS 3
 #define SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
+// 用来获取header其实位置的指针
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
+// 获取s对应的类型
 static inline size_t sdslen(const sds s) {
+    // 向前取一位flag
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
