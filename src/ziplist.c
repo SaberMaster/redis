@@ -10,27 +10,41 @@
  *
  * ZIPLIST OVERALL LAYOUT:
  * The general layout of the ziplist is as follows:
+   ziplist 结构
  * <zlbytes><zltail><zllen><entry><entry><zlend>
  *
+   zlbytes 表示ziplist占用的总字节数
  * <zlbytes> is an unsigned integer to hold the number of bytes that the
  * ziplist occupies. This value needs to be stored to be able to resize the
  * entire structure without the need to traverse it first.
  *
+   zltail 表示最后一项在ziplist中的偏移字节数
  * <zltail> is the offset to the last entry in the list. This allows a pop
  * operation on the far side of the list without the need for full traversal.
  *
+    zllen 表示ziplist中的数据项数
  * <zllen> is the number of entries.When this value is larger than 2**16-2,
  * we need to traverse the entire list to know how many items it holds.
  *
+   zlend 表示ziplist的最后一个字节 结束标志 255
  * <zlend> is a single byte special value, equal to 255, which indicates the
  * end of the list.
  *
+   entry 真正存放数据的数据项
+   <prevrawlen><len><data>
+   <prevrawlen> 存储前一个数据项的总字节数 方便从后向前遍历
+   <len> 表示当前数据项长度
  * ZIPLIST ENTRIES:
  * Every entry in the ziplist is prefixed by a header that contains two pieces
  * of information. First, the length of the previous entry is stored to be
  * able to traverse the list from back to front. Second, the encoding with an
  * optional string length of the entry itself is stored.
  *
+   prevrawlen len 都是变长存储
+   如果前一项小于254 那么就用一个字节表示
+   如果大于254 就用5个字节表示 第一个字节的值为254 后面四个组成一个整形
+   用来存储真正的大小
+   255 不能用 已经被定义为zlend了
  * The length of the previous entry is encoded in the following way:
  * If this length is smaller than 254 bytes, it will only consume a single
  * byte that takes the length as value. When the length is greater than or
@@ -44,6 +58,7 @@
  * actual length of the string. When the entry is an integer the first 2 bits
  * are both set to 1. The following 2 bits are used to specify what kind of
  * integer will be stored after this header. An overview of the different
+ len字段更为复杂分为以下9中情况
  * types and encodings is as follows:
  *
  * |00pppppp| - 1 byte
@@ -68,6 +83,7 @@
  *      subtracted from the encoded 4 bit value to obtain the right value.
  * |11111111| - End of ziplist.
  *
+   采用小端存储
  * All the integers are represented in little endian byte order.
  *
  * ----------------------------------------------------------------------------
