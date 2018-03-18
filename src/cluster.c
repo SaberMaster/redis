@@ -5031,9 +5031,11 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
         margc = ms->commands[i].argc;
         margv = ms->commands[i].argv;
 
+        // get all keys from command
         keyindex = getKeysFromCommand(mcmd,margv,margc,&numkeys);
         for (j = 0; j < numkeys; j++) {
             robj *thiskey = margv[keyindex[j]];
+            // get the hashsolt of the key
             int thisslot = keyHashSlot((char*)thiskey->ptr,
                                        sdslen(thiskey->ptr));
 
@@ -5042,6 +5044,7 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
                  * and node. */
                 firstkey = thiskey;
                 slot = thisslot;
+                // set node as the node contain the slot
                 n = server.cluster->slots[slot];
 
                 /* Error: If a slot is not served, we are in "cluster down"
@@ -5070,14 +5073,19 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
             } else {
                 /* If it is not the first key, make sure it is exactly
                  * the same key as the first we saw. */
+                // 命令中含有多个不同的key
                 if (!equalStringObjects(firstkey,thiskey)) {
+                    // 不同的key不在同一个槽位
                     if (slot != thisslot) {
                         /* Error: multiple keys from different slots. */
+                        // 如果一条命令中的key 来自不同的槽位 返回跨slot error
                         getKeysFreeResult(keyindex);
                         if (error_code)
                             *error_code = CLUSTER_REDIR_CROSS_SLOT;
                         return NULL;
+                        // 不同的key在同一个槽位
                     } else {
+                        // 标记此命令有多个不同key
                         /* Flag this request as one with multiple different
                          * keys. */
                         multiple_keys = 1;
