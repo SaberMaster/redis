@@ -189,6 +189,7 @@ typedef long long mstime_t; /* millisecond time type. */
 #define CMD_FAST 8192                 /* "F" flag */
 
 /* Object types */
+// object 的类型
 #define OBJ_STRING 0
 #define OBJ_LIST 1
 #define OBJ_SET 2
@@ -198,15 +199,25 @@ typedef long long mstime_t; /* millisecond time type. */
 /* Objects encoding. Some kind of objects like Strings and Hashes can be
  * internally represented in multiple ways. The 'encoding' field of the object
  * is set to one of this fields for this object. */
+// 标识了Object的编码类型
+// 最原生的表示方法 只有string会用到(sds)
 #define OBJ_ENCODING_RAW 0     /* Raw representation */
+// 表示为数字,long型
 #define OBJ_ENCODING_INT 1     /* Encoded as integer */
+// hashtable dict
 #define OBJ_ENCODING_HT 2      /* Encoded as hash table */
+// 已经不用了 < 2.6
 #define OBJ_ENCODING_ZIPMAP 3  /* Encoded as zipmap */
 #define OBJ_ENCODING_LINKEDLIST 4 /* Encoded as regular linked list */
+// ziplist
 #define OBJ_ENCODING_ZIPLIST 5 /* Encoded as ziplist */
+// intset 用于set
 #define OBJ_ENCODING_INTSET 6  /* Encoded as intset */
+// skiplist 用于sorted set(zset)
 #define OBJ_ENCODING_SKIPLIST 7  /* Encoded as skiplist */
+// 特殊嵌入式sds
 #define OBJ_ENCODING_EMBSTR 8  /* Embedded sds string encoding */
+// quicklist 用于 list
 #define OBJ_ENCODING_QUICKLIST 9 /* Encoded as linked list of ziplists */
 
 /* Defines related to the dump file format. To store 32 bits lengths for short
@@ -272,6 +283,7 @@ typedef long long mstime_t; /* millisecond time type. */
 #define CLIENT_REPLY_SKIP (1<<24)  /* Don't send just this reply. */
 #define CLIENT_LUA_DEBUG (1<<25)  /* Run EVAL in debug mode. */
 #define CLIENT_LUA_DEBUG_SYNC (1<<26)  /* EVAL debugging without fork() */
+
 
 /* Client block type (btype field in client structure)
  * if CLIENT_BLOCKED flag is set. */
@@ -460,11 +472,17 @@ typedef long long mstime_t; /* millisecond time type. */
 #define LRU_BITS 24
 #define LRU_CLOCK_MAX ((1<<LRU_BITS)-1) /* Max value of obj->lru */
 #define LRU_CLOCK_RESOLUTION 1000 /* LRU clock resolution in ms */
+// redis object
 typedef struct redisObject {
+    // 标明了对象的类型 (5种)
     unsigned type:4;
+    // 标明了对应了内部表达形式(10 种)
     unsigned encoding:4;
     unsigned lru:LRU_BITS; /* lru time (relative to server.lruclock) */
+    // 引用计数
+    // 对象共享的时候 只占用一个内存拷贝
     int refcount;
+    // 指向真正的数据对象
     void *ptr;
 } robj;
 
@@ -1222,6 +1240,7 @@ int compareStringObjects(robj *a, robj *b);
 int collateStringObjects(robj *a, robj *b);
 int equalStringObjects(robj *a, robj *b);
 unsigned long long estimateObjectIdleTime(robj *o);
+// 判断是否为RAW 或者 EMBSTR
 #define sdsEncodedObject(objptr) (objptr->encoding == OBJ_ENCODING_RAW || objptr->encoding == OBJ_ENCODING_EMBSTR)
 
 /* Synchronous I/O with timeout */

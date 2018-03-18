@@ -139,7 +139,7 @@ void setCommand(client *c) {
             return;
         }
     }
-
+    // 对value进行object编码
     c->argv[2] = tryObjectEncoding(c->argv[2]);
     setGenericCommand(c,flags,c->argv[1],c->argv[2],expire,unit,NULL,NULL);
 }
@@ -460,6 +460,7 @@ void appendCommand(client *c) {
             return;
 
         /* Append the value */
+        // 将类型转换为RAW类型 只有这种类型支持添加操作
         o = dbUnshareStringValue(c->db,c->argv[1],o);
         o->ptr = sdscatlen(o->ptr,append->ptr,sdslen(append->ptr));
         totlen = sdslen(o->ptr);
