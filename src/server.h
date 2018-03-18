@@ -366,7 +366,9 @@ typedef long long mstime_t; /* millisecond time type. */
 /* Anti-warning macro... */
 #define UNUSED(V) ((void) V)
 
+// 跳表的最大层数
 #define ZSKIPLIST_MAXLEVEL 32 /* Should be enough for 2^32 elements */
+// 跳表的层级分配概率
 #define ZSKIPLIST_P 0.25      /* Skiplist P = 1/4 */
 
 /* Append only defines */
@@ -654,24 +656,43 @@ struct sharedObjectsStruct {
 };
 
 /* ZSETs use a specialized version of Skiplists */
+// 跳表节点
+// 优化过的skiplist
 typedef struct zskiplistNode {
+    // 节点数据
+    // 此处存放的是sds
+    // 由于zadd在插入skiplist之前进行了解码
     robj *obj;
+    // 分数
     double score;
+    // 指向上一节点的指针
     struct zskiplistNode *backward;
+    // 存放各层链表的下一节点的指针
+    // 柔性数组
     struct zskiplistLevel {
+        // 下一节点的指针
         struct zskiplistNode *forward;
+        // 用于计算排名
         unsigned int span;
     } level[];
 } zskiplistNode;
 
+// skiplist 结构
 typedef struct zskiplist {
+    // 头指针 尾指针
     struct zskiplistNode *header, *tail;
+    // 链表长度
     unsigned long length;
+    // 所有节点层数的最大值
     int level;
 } zskiplist;
 
+// zset 结构
+// 在sorted set 中元素个数超过指定个数的时候使用
 typedef struct zset {
+    // 字典用于存储 key - score
     dict *dict;
+    // 跳表 用于根据score查询数据(范围查找)
     zskiplist *zsl;
 } zset;
 
