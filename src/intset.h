@@ -32,9 +32,14 @@
 #define __INTSET_H
 #include <stdint.h>
 
+// intset数据结构
+// intset是有序的
 typedef struct intset {
+    // 编码
     uint32_t encoding;
+    // 长度
     uint32_t length;
+    // 柔性数组
     int8_t contents[];
 } intset;
 

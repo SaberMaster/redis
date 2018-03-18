@@ -50,25 +50,31 @@ robj *setTypeCreate(robj *value) {
  *
  * If the value was already member of the set, nothing is done and 0 is
  * returned, otherwise the new element is added and 1 is returned. */
+// 插入数据
 int setTypeAdd(robj *subject, robj *value) {
     long long llval;
+    // 是否为dict
     if (subject->encoding == OBJ_ENCODING_HT) {
         if (dictAdd(subject->ptr,value,NULL) == DICT_OK) {
             incrRefCount(value);
             return 1;
         }
+        // 是否为intset
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
+        // value可以转换为数字
         if (isObjectRepresentableAsLongLong(value,&llval) == C_OK) {
             uint8_t success = 0;
             subject->ptr = intsetAdd(subject->ptr,llval,&success);
             if (success) {
                 /* Convert to regular set when the intset contains
                  * too many entries. */
+                // 超过指定数量转为dict结构
                 if (intsetLen(subject->ptr) > server.set_max_intset_entries)
                     setTypeConvert(subject,OBJ_ENCODING_HT);
                 return 1;
             }
         } else {
+            // 不能转换为数组使用 转换为dict结构
             /* Failed to get integer from object, convert to regular set. */
             setTypeConvert(subject,OBJ_ENCODING_HT);
 
