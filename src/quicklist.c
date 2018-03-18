@@ -91,6 +91,8 @@ static const size_t optimization_level[] = {4096, 8192, 16384, 32768, 65536};
 
 /* Create a new quicklist.
  * Free with quicklistRelease(). */
+// 创建quicklist
+// lpush rpush 第一次创建的时候调用
 quicklist *quicklistCreate(void) {
     struct quicklist *quicklist;
 
@@ -477,14 +479,19 @@ REDIS_STATIC int _quicklistNodeAllowMerge(const quicklistNode *a,
  *
  * Returns 0 if used existing head.
  * Returns 1 if new head created. */
+// 在头部插入
 int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_head = quicklist->head;
     if (likely(
+            // 如果ziplist没有超过上限 则返回1
             _quicklistNodeAllowInsert(quicklist->head, quicklist->fill, sz))) {
+        // 在ziplist总追加
         quicklist->head->zl =
             ziplistPush(quicklist->head->zl, value, sz, ZIPLIST_HEAD);
         quicklistNodeUpdateSz(quicklist->head);
     } else {
+        // ziplist 超过上限 返回0
+        // 常见新节点
         quicklistNode *node = quicklistCreateNode();
         node->zl = ziplistPush(ziplistNew(), value, sz, ZIPLIST_HEAD);
 
@@ -829,6 +836,7 @@ REDIS_STATIC quicklistNode *_quicklistSplitNode(quicklistNode *node, int offset,
  *
  * If after==1, the new value is inserted after 'entry', otherwise
  * the new value is inserted before 'entry'. */
+// 在指定位置插入节点
 REDIS_STATIC void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry,
                                    void *value, const size_t sz, int after) {
     int full = 0, at_tail = 0, at_head = 0, full_next = 0, full_prev = 0;
@@ -836,6 +844,7 @@ REDIS_STATIC void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry,
     quicklistNode *node = entry->node;
     quicklistNode *new_node = NULL;
 
+    // 如果指定位置没有节点 创建节点
     if (!node) {
         /* we have no reference node, so let's create only node in the list */
         D("No node given!");
@@ -847,6 +856,7 @@ REDIS_STATIC void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry,
         return;
     }
 
+    //判断指定节点是否允许插入
     /* Populate accounting flags for easier boolean checks later */
     if (!_quicklistNodeAllowInsert(node, fill, sz)) {
         D("Current node is full with count %d with requested fill %lu",
@@ -939,11 +949,13 @@ REDIS_STATIC void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry,
     quicklist->count++;
 }
 
+// 在指定位置之前插入节点
 void quicklistInsertBefore(quicklist *quicklist, quicklistEntry *entry,
                            void *value, const size_t sz) {
     _quicklistInsert(quicklist, entry, value, sz, 0);
 }
 
+// 在指定位置之后插入节点
 void quicklistInsertAfter(quicklist *quicklist, quicklistEntry *entry,
                           void *value, const size_t sz) {
     _quicklistInsert(quicklist, entry, value, sz, 1);
@@ -1321,6 +1333,7 @@ void quicklistRotate(quicklist *quicklist) {
  * Return value of 0 means no elements available.
  * Return value of 1 means check 'data' and 'sval' for values.
  * If 'data' is set, use 'data' and 'sz'.  Otherwise, use 'sval'. */
+// 实现pop操作
 int quicklistPopCustom(quicklist *quicklist, int where, unsigned char **data,
                        unsigned int *sz, long long *sval,
                        void *(*saver)(unsigned char *data, unsigned int sz)) {
@@ -1401,10 +1414,13 @@ int quicklistPop(quicklist *quicklist, int where, unsigned char **data,
 }
 
 /* Wrapper to allow argument-based switching between HEAD/TAIL pop */
+// 插入节点
 void quicklistPush(quicklist *quicklist, void *value, const size_t sz,
                    int where) {
+    // 在头部插入
     if (where == QUICKLIST_HEAD) {
         quicklistPushHead(quicklist, value, sz);
+        // 在尾部插入
     } else if (where == QUICKLIST_TAIL) {
         quicklistPushTail(quicklist, value, sz);
     }
