@@ -847,6 +847,7 @@ int removeExpire(redisDb *db, robj *key) {
     /* An expire may only be removed if there is a corresponding entry in the
      * main dict. Otherwise, the key will never be freed. */
     serverAssertWithInfo(NULL,key,dictFind(db->dict,key->ptr) != NULL);
+    // remove the relation of expires time and key
     return dictDelete(db->expires,key->ptr) == DICT_OK;
 }
 
@@ -856,6 +857,7 @@ void setExpire(redisDb *db, robj *key, long long when) {
     /* Reuse the sds from the main dict in the expire dict */
     kde = dictFind(db->dict,key->ptr);
     serverAssertWithInfo(NULL,key,kde != NULL);
+    // add the relation between key and expire time
     de = dictReplaceRaw(db->expires,dictGetKey(kde));
     dictSetSignedIntegerVal(de,when);
 }
@@ -899,13 +901,17 @@ void propagateExpire(redisDb *db, robj *key) {
     decrRefCount(argv[1]);
 }
 
+// lazy delete key
+// exec when read/write db
 int expireIfNeeded(redisDb *db, robj *key) {
     mstime_t when = getExpire(db,key);
     mstime_t now;
 
+    // no expire
     if (when < 0) return 0; /* No expire for this key */
 
     /* Don't expire anything while loading. It will be done later. */
+    // while loading
     if (server.loading) return 0;
 
     /* If we are in the context of a Lua script, we claim that time is
@@ -913,6 +919,7 @@ int expireIfNeeded(redisDb *db, robj *key) {
      * only the first time it is accessed and not in the middle of the
      * script execution, making propagation to slaves / AOF consistent.
      * See issue #1525 on Github for more information. */
+    // exec lua script
     now = server.lua_caller ? server.lua_time_start : mstime();
 
     /* If we are running in the context of a slave, return ASAP:
@@ -922,6 +929,7 @@ int expireIfNeeded(redisDb *db, robj *key) {
      * Still we try to return the right information to the caller,
      * that is, 0 if we think the key should be still valid, 1 if
      * we think the key is expired at this time. */
+    // in a slave host
     if (server.masterhost != NULL) return now > when;
 
     /* Return when this key has not expired */
@@ -932,6 +940,7 @@ int expireIfNeeded(redisDb *db, robj *key) {
     propagateExpire(db,key);
     notifyKeyspaceEvent(NOTIFY_EXPIRED,
         "expired",key,db->id);
+    // del key
     return dbDelete(db,key);
 }
 
@@ -953,11 +962,14 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
     if (getLongLongFromObjectOrReply(c, param, &when, NULL) != C_OK)
         return;
 
+    // convert to ms
     if (unit == UNIT_SECONDS) when *= 1000;
     when += basetime;
 
     /* No key, return zero. */
+    // if key not exist
     if (lookupKeyWrite(c->db,key) == NULL) {
+        // return 0
         addReply(c,shared.czero);
         return;
     }
@@ -983,6 +995,7 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
         addReply(c, shared.cone);
         return;
     } else {
+        // set expires time
         setExpire(c->db,key,when);
         addReply(c,shared.cone);
         signalModifiedKey(c->db,key);
@@ -991,19 +1004,22 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
         return;
     }
 }
-
+// expire
 void expireCommand(client *c) {
     expireGenericCommand(c,mstime(),UNIT_SECONDS);
 }
 
+// expireat
 void expireatCommand(client *c) {
     expireGenericCommand(c,0,UNIT_SECONDS);
 }
 
+// pexpire
 void pexpireCommand(client *c) {
     expireGenericCommand(c,mstime(),UNIT_MILLISECONDS);
 }
 
+// prexireat
 void pexpireatCommand(client *c) {
     expireGenericCommand(c,0,UNIT_MILLISECONDS);
 }
@@ -1012,17 +1028,21 @@ void ttlGenericCommand(client *c, int output_ms) {
     long long expire, ttl = -1;
 
     /* If the key does not exist at all, return -2 */
+    // check key if exists
     if (lookupKeyReadWithFlags(c->db,c->argv[1],LOOKUP_NOTOUCH) == NULL) {
         addReplyLongLong(c,-2);
         return;
     }
     /* The key exists. Return -1 if it has no expire, or the actual
      * TTL value otherwise. */
+    // get expire time
     expire = getExpire(c->db,c->argv[1]);
     if (expire != -1) {
+        // calc left time
         ttl = expire-mstime();
         if (ttl < 0) ttl = 0;
     }
+    // -1 == expire
     if (ttl == -1) {
         addReplyLongLong(c,-1);
     } else {
@@ -1030,16 +1050,19 @@ void ttlGenericCommand(client *c, int output_ms) {
     }
 }
 
+// return the seconds left
 void ttlCommand(client *c) {
     ttlGenericCommand(c, 0);
 }
 
+// return ms left
 void pttlCommand(client *c) {
     ttlGenericCommand(c, 1);
 }
 
 void persistCommand(client *c) {
     if (lookupKeyWrite(c->db,c->argv[1])) {
+        // remove expires time
         if (removeExpire(c->db,c->argv[1])) {
             addReply(c,shared.cone);
             server.dirty++;
