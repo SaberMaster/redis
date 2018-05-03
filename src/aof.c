@@ -575,6 +575,7 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv, int a
      * accumulate the differences between the child DB and the current one
      * in a buffer, so that when the child process will do its work we
      * can append the differences to the new append only file. */
+    // if has aof_child process , append cmd in aof rewrite buf
     if (server.aof_child_pid != -1)
         aofRewriteBufferAppend((unsigned char*)buf,sdslen(buf));
 
@@ -1035,6 +1036,7 @@ ssize_t aofReadDiffFromParent(void) {
  * log Redis uses variadic commands when possible, such as RPUSH, SADD
  * and ZADD. However at max AOF_REWRITE_ITEMS_PER_CMD items per time
  * are inserted using a single command. */
+// rewrite aof
 int rewriteAppendOnlyFile(char *filename) {
     dictIterator *di = NULL;
     dictEntry *de;
@@ -1048,6 +1050,7 @@ int rewriteAppendOnlyFile(char *filename) {
 
     /* Note that we have to use a different temp name here compared to the
      * one used by rewriteAppendOnlyFileBackground() function. */
+    // create new rewrite aof file
     snprintf(tmpfile,256,"temp-rewriteaof-%d.aof", (int) getpid());
     fp = fopen(tmpfile,"w");
     if (!fp) {
@@ -1060,6 +1063,7 @@ int rewriteAppendOnlyFile(char *filename) {
     if (server.aof_rewrite_incremental_fsync)
         rioSetAutoSync(&aof,AOF_AUTOSYNC_BYTES);
     for (j = 0; j < server.dbnum; j++) {
+        // select db
         char selectcmd[] = "*2\r\n$6\r\nSELECT\r\n";
         redisDb *db = server.db+j;
         dict *d = db->dict;
@@ -1075,6 +1079,7 @@ int rewriteAppendOnlyFile(char *filename) {
         if (rioWriteBulkLongLong(&aof,j) == 0) goto werr;
 
         /* Iterate this DB writing every entry */
+        // iterator
         while((de = dictNext(di)) != NULL) {
             sds keystr;
             robj key, *o;
@@ -1086,11 +1091,14 @@ int rewriteAppendOnlyFile(char *filename) {
 
             expiretime = getExpire(db,&key);
 
+            // check is expired
             /* If this key is already expired skip it */
             if (expiretime != -1 && expiretime < now) continue;
 
             /* Save the key and associated value */
+            // rewrite according the obj type
             if (o->type == OBJ_STRING) {
+                // string
                 /* Emit a SET command */
                 char cmd[]="*3\r\n$3\r\nSET\r\n";
                 if (rioWrite(&aof,cmd,sizeof(cmd)-1) == 0) goto werr;
@@ -1098,17 +1106,22 @@ int rewriteAppendOnlyFile(char *filename) {
                 if (rioWriteBulkObject(&aof,&key) == 0) goto werr;
                 if (rioWriteBulkObject(&aof,o) == 0) goto werr;
             } else if (o->type == OBJ_LIST) {
+                // list
                 if (rewriteListObject(&aof,&key,o) == 0) goto werr;
             } else if (o->type == OBJ_SET) {
+                // set
                 if (rewriteSetObject(&aof,&key,o) == 0) goto werr;
             } else if (o->type == OBJ_ZSET) {
+                // zset
                 if (rewriteSortedSetObject(&aof,&key,o) == 0) goto werr;
             } else if (o->type == OBJ_HASH) {
+                // hash
                 if (rewriteHashObject(&aof,&key,o) == 0) goto werr;
             } else {
                 serverPanic("Unknown object type");
             }
             /* Save the expire time */
+            // if expiretime != -1 add expiretime cmd
             if (expiretime != -1) {
                 char cmd[]="*3\r\n$9\r\nPEXPIREAT\r\n";
                 if (rioWrite(&aof,cmd,sizeof(cmd)-1) == 0) goto werr;
@@ -1118,9 +1131,11 @@ int rewriteAppendOnlyFile(char *filename) {
             /* Read some diff from the parent process from time to time. */
             if (aof.processed_bytes > processed+1024*10) {
                 processed = aof.processed_bytes;
+                // get aof diff from parent process
                 aofReadDiffFromParent();
             }
         }
+        // release iterator
         dictReleaseIterator(di);
         di = NULL;
     }
@@ -1136,6 +1151,7 @@ int rewriteAppendOnlyFile(char *filename) {
      * some more data in a loop as soon as there is a good chance more data
      * will come. If it looks like we are wasting time, we abort (this
      * happens after 20 ms without new data). */
+
     int nodata = 0;
     mstime_t start = mstime();
     while(mstime()-start < 1000 && nodata < 20) {
@@ -1161,6 +1177,7 @@ int rewriteAppendOnlyFile(char *filename) {
     serverLog(LL_NOTICE,"Parent agreed to stop sending diffs. Finalizing AOF...");
 
     /* Read the final diff if any. */
+    //get final diff
     aofReadDiffFromParent();
 
     /* Write the received diff to the file. */
@@ -1283,6 +1300,7 @@ void aofClosePipes(void) {
  *    finally will rename(2) the temp file in the actual file name.
  *    The the new file is reopened as the new append only file. Profit!
  */
+// rewrite aof background
 int rewriteAppendOnlyFileBackground(void) {
     pid_t childpid;
     long long start;
@@ -1290,13 +1308,16 @@ int rewriteAppendOnlyFileBackground(void) {
     if (server.aof_child_pid != -1 || server.rdb_child_pid != -1) return C_ERR;
     if (aofCreatePipes() != C_OK) return C_ERR;
     start = ustime();
+    // fork a child process to rewrite aof
     if ((childpid = fork()) == 0) {
         char tmpfile[256];
 
+        // child process transaction
         /* Child */
         closeListeningSockets(0);
         redisSetProcTitle("redis-aof-rewrite");
         snprintf(tmpfile,256,"temp-rewriteaof-bg-%d.aof", (int) getpid());
+        // exec rewriteAppendOnlyFile
         if (rewriteAppendOnlyFile(tmpfile) == C_OK) {
             size_t private_dirty = zmalloc_get_private_dirty();
 
@@ -1311,6 +1332,7 @@ int rewriteAppendOnlyFileBackground(void) {
         }
     } else {
         /* Parent */
+        // parent process transaction
         server.stat_fork_time = ustime()-start;
         server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
         latencyAddSampleIfNeeded("fork",server.stat_fork_time/1000);
@@ -1325,6 +1347,7 @@ int rewriteAppendOnlyFileBackground(void) {
             "Background append only file rewriting started by pid %d",childpid);
         server.aof_rewrite_scheduled = 0;
         server.aof_rewrite_time_start = time(NULL);
+        // set aof_child_pid
         server.aof_child_pid = childpid;
         updateDictResizePolicy();
         /* We set appendseldb to -1 in order to force the next call to the
