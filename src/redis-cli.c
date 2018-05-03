@@ -493,6 +493,7 @@ static int cliAuth(void) {
 }
 
 /* Send SELECT dbnum to the server */
+// select current client db
 static int cliSelect(void) {
     redisReply *reply;
     if (config.dbnum == 0) return REDIS_OK;

@@ -1082,12 +1082,16 @@ void updateCachedTime(void) {
  * Here is where we do a number of things that need to be done asynchronously.
  * For instance:
  *
+ // 激活过期键收集
  * - Active expired keys collection (it is also performed in a lazy way on
  *   lookup).
  * - Software watchdog.
  * - Update some statistic.
+ // DB增量重hash
  * - Incremental rehashing of the DBs hash tables.
+ // 触发 BGSAVE / AOF 重写
  * - Triggering BGSAVE / AOF rewrite, and handling of terminated children.
+ // 各种原因的客户端超时
  * - Clients timeout of different kinds.
  * - Replication reconnection.
  * - Many more...
@@ -1097,6 +1101,7 @@ void updateCachedTime(void) {
  * a macro is used: run_with_period(milliseconds) { .... }
  */
 
+// 定时任务
 int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     int j;
     UNUSED(eventLoop);
@@ -1228,7 +1233,10 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
              * the given amount of seconds, and if the latest bgsave was
              * successful or if, in case of an error, at least
              * CONFIG_BGSAVE_RETRY_DELAY seconds already elapsed. */
+            // trigger RDB
+            // dirty > saveparams setting
             if (server.dirty >= sp->changes &&
+                // delta time > saveparams setting
                 server.unixtime-server.lastsave > sp->seconds &&
                 (server.unixtime-server.lastbgsave_try >
                  CONFIG_BGSAVE_RETRY_DELAY ||
@@ -1236,6 +1244,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
             {
                 serverLog(LL_NOTICE,"%d changes in %d seconds. Saving...",
                     sp->changes, (int)sp->seconds);
+                // save bg
                 rdbSaveBackground(server.rdb_filename);
                 break;
             }
@@ -1473,6 +1482,7 @@ void initServerConfig(void) {
     server.ipfd_count = 0;
     server.sofd = -1;
     server.protected_mode = CONFIG_DEFAULT_PROTECTED_MODE;
+    // set dbnum
     server.dbnum = CONFIG_DEFAULT_DBNUM;
     server.verbosity = CONFIG_DEFAULT_VERBOSITY;
     server.maxidletime = CONFIG_DEFAULT_CLIENT_TIMEOUT;

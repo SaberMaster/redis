@@ -700,20 +700,27 @@ size_t rdbSavedObjectLen(robj *o) {
  * On error -1 is returned.
  * On success if the key was actually saved 1 is returned, otherwise 0
  * is returned (the key was already expired). */
+// save key-value pair
 int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val,
                         long long expiretime, long long now)
 {
     /* Save the expire time */
+    // if has expiretime
     if (expiretime != -1) {
         /* If this key is already expired skip it */
         if (expiretime < now) return 0;
+        // save type (EXPIRETIME)
         if (rdbSaveType(rdb,RDB_OPCODE_EXPIRETIME_MS) == -1) return -1;
+        // save expiretime
         if (rdbSaveMillisecondTime(rdb,expiretime) == -1) return -1;
     }
 
     /* Save type, key, value */
+    // save obj type
     if (rdbSaveObjectType(rdb,val) == -1) return -1;
+    // save key
     if (rdbSaveStringObject(rdb,key) == -1) return -1;
+    // save value
     if (rdbSaveObject(rdb,val) == -1) return -1;
     return 1;
 }
@@ -759,6 +766,7 @@ int rdbSaveInfoAuxFields(rio *rdb) {
  * When the function returns C_ERR and if 'error' is not NULL, the
  * integer pointed by 'error' is set to the value of errno just after the I/O
  * error. */
+// generate rdb file
 int rdbSaveRio(rio *rdb, int *error) {
     dictIterator *di = NULL;
     dictEntry *de;
@@ -767,12 +775,15 @@ int rdbSaveRio(rio *rdb, int *error) {
     long long now = mstime();
     uint64_t cksum;
 
+    // use checksum
     if (server.rdb_checksum)
         rdb->update_cksum = rioGenericUpdateChecksum;
+    // begin REDIS + VERSION
     snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
     if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
     if (rdbSaveInfoAuxFields(rdb) == -1) goto werr;
 
+    // databases
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
         dict *d = db->dict;
@@ -781,7 +792,9 @@ int rdbSaveRio(rio *rdb, int *error) {
         if (!di) return C_ERR;
 
         /* Write the SELECT DB opcode */
+        // write SELECTDB
         if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;
+        // write DB num
         if (rdbSaveLen(rdb,j) == -1) goto werr;
 
         /* Write the RESIZE DB opcode. We trim the size to UINT32_MAX, which
@@ -800,6 +813,7 @@ int rdbSaveRio(rio *rdb, int *error) {
         if (rdbSaveLen(rdb,expires_size) == -1) goto werr;
 
         /* Iterate this DB writing every entry */
+        // write key-value-pair
         while((de = dictNext(di)) != NULL) {
             sds keystr = dictGetKey(de);
             robj key, *o = dictGetVal(de);
@@ -820,6 +834,7 @@ int rdbSaveRio(rio *rdb, int *error) {
      * loading code skips the check in this case. */
     cksum = rdb->cksum;
     memrev64ifbe(&cksum);
+    // checksum
     if (rioWrite(rdb,&cksum,8) == 0) goto werr;
     return C_OK;
 
