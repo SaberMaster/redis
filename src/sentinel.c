@@ -160,10 +160,13 @@ typedef struct instanceLink {
                                    the link was down. */
 } instanceLink;
 
+// SRI
 typedef struct sentinelRedisInstance {
+    // flag of master
     int flags;      /* See SRI_... defines */
     char *name;     /* Master name from the point of view of this sentinel. */
     char *runid;    /* Run ID of this instance, or unique ID if is a Sentinel.*/
+    // epoch
     uint64_t config_epoch;  /* Configuration epoch. */
     sentinelAddr *addr; /* Master host. */
     instanceLink *link; /* Link to the instance, may be shared for Sentinels. */
@@ -173,7 +176,9 @@ typedef struct sentinelRedisInstance {
                                  via Pub/Sub. */
     mstime_t last_master_down_reply_time; /* Time of last reply to
                                              SENTINEL is-master-down command. */
+    // 主观下线时间
     mstime_t s_down_since_time; /* Subjectively down since time. */
+    // 客观下线时间
     mstime_t o_down_since_time; /* Objectively down since time. */
     mstime_t down_after_period; /* Consider it down after that period. */
     mstime_t info_refresh;  /* Time at which we received INFO output from it. */
@@ -188,14 +193,19 @@ typedef struct sentinelRedisInstance {
     mstime_t slave_conf_change_time; /* Last time slave master addr changed. */
 
     /* Master specific. */
+    // other sentinels
     dict *sentinels;    /* Other sentinels monitoring the same master. */
+    // slaves
     dict *slaves;       /* Slaves for this master instance. */
+    // 投票数量
     unsigned int quorum;/* Number of sentinels that need to agree on failure. */
     int parallel_syncs; /* How many slaves to reconfigure at same time. */
+    // password
     char *auth_pass;    /* Password to use for AUTH against master & slaves. */
 
     /* Slave specific. */
     mstime_t master_link_down_time; /* Slave replication link down time. */
+    // 优先级
     int slave_priority; /* Slave priority according to its INFO output. */
     mstime_t slave_reconf_sent_time; /* Time at which we sent SLAVE OF <new> */
     struct sentinelRedisInstance *master; /* Master instance if it's slave. */
@@ -204,6 +214,7 @@ typedef struct sentinelRedisInstance {
     int slave_master_link_status; /* Master link status as reported by INFO */
     unsigned long long slave_repl_offset; /* Slave replication offset. */
     /* Failover */
+    // leader
     char *leader;       /* If this is a master instance, this is the runid of
                            the Sentinel that should perform the failover. If
                            this is a Sentinel, this is the runid of the Sentinel
@@ -225,16 +236,25 @@ typedef struct sentinelRedisInstance {
 } sentinelRedisInstance;
 
 /* Main state. */
+// sentinel's state
 struct sentinelState {
     char myid[CONFIG_RUN_ID_SIZE+1]; /* This sentinel ID. */
+    // current epoch, used for 故障转移
     uint64_t current_epoch;         /* Current epoch. */
+    // key is master name
+    // value is a sentinelRedisInstance pointer
     dict *masters;      /* Dictionary of master sentinelRedisInstances.
                            Key is the instance name, value is the
                            sentinelRedisInstance structure pointer. */
+    // is tilt mode
     int tilt;           /* Are we in TILT mode? */
+    // count of running scripts
     int running_scripts;    /* Number of scripts in execution right now. */
+    // the time of enter tilt
     mstime_t tilt_start_time;       /* When TITL started. */
+    // last time of exec time handler
     mstime_t previous_time;         /* Last time we ran the time handler. */
+    // queue of scripts
     list *scripts_queue;            /* Queue of user scripts to execute. */
     char *announce_ip;  /* IP addr that is gossiped to other sentinels if
                            not NULL. */
@@ -422,6 +442,7 @@ void sentinelSetCommand(client *c);
 void sentinelPublishCommand(client *c);
 void sentinelRoleCommand(client *c);
 
+// sentinel cmd
 struct redisCommand sentinelcmds[] = {
     {"ping",pingCommand,1,"",0,NULL,0,0,0,0,0},
     {"sentinel",sentinelCommand,-2,"",0,NULL,0,0,0,0,0},
