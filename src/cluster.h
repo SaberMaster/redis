@@ -38,10 +38,15 @@ struct clusterNode;
 
 /* clusterLink encapsulates everything needed to talk with a remote node. */
 typedef struct clusterLink {
+    // create time
     mstime_t ctime;             /* Link creation time */
+    // socket file descriptor
     int fd;                     /* TCP socket file descriptor */
+    // send buffer
     sds sndbuf;                 /* Packet send buffer */
+    // receive buffer
     sds rcvbuf;                 /* Packet reception buffer */
+    // related node
     struct clusterNode *node;   /* Node related to this link if any, or NULL */
 } clusterLink;
 
@@ -80,10 +85,16 @@ typedef struct clusterNodeFailReport {
 } clusterNodeFailReport;
 
 typedef struct clusterNode {
+    // create time
     mstime_t ctime; /* Node object creation time. */
+    // node name(40 character)
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
+    // node flag (is master or is online)
     int flags;      /* CLUSTER_NODE_... */
+    // epoch
     uint64_t configEpoch; /* Last configEpoch observed for this node */
+    // slots
+    //if handled by this node the bit is 1
     unsigned char slots[CLUSTER_SLOTS/8]; /* slots handled by this node */
     int numslots;   /* Number of slots handled by this node */
     int numslaves;  /* Number of slave nodes, if this is a master */
@@ -99,17 +110,26 @@ typedef struct clusterNode {
     mstime_t repl_offset_time;  /* Unix time we received offset for this node */
     mstime_t orphaned_time;     /* Starting time of orphaned master condition */
     long long repl_offset;      /* Last known repl offset for this node. */
+    // ip
     char ip[NET_IP_STR_LEN];  /* Latest known IP address of this node */
     int port;                   /* Latest known port of this node */
+    // tcp/ip link
     clusterLink *link;          /* TCP/IP link with this node */
     list *fail_reports;         /* List of nodes signaling this as failing */
 } clusterNode;
 
 typedef struct clusterState {
+    // myself
     clusterNode *myself;  /* This node */
+    // epoch
     uint64_t currentEpoch;
+    // cluster state
     int state;            /* CLUSTER_OK, CLUSTER_FAIL, ... */
+    // the num of master node which handled at least one slot
     int size;             /* Num of master nodes with at least one slot */
+    // all cluster nodes
+    // key is name
+    // value is clusterState
     dict *nodes;          /* Hash table of name -> clusterNode structures */
     dict *nodes_black_list; /* Nodes we don't re-add for a few seconds. */
     clusterNode *migrating_slots_to[CLUSTER_SLOTS];
